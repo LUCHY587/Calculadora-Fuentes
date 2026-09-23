@@ -1,7 +1,7 @@
 {
   "name": "calculadora-alquileres-mmfuentes",
   "productName": "Calculadora de Alquileres",
-  "version": "1.4.2",
+    "version": "1.4.3",
   "description": "Calculadora de actualización de alquileres (ICL, IPC, CER, IS, IPIM, UVA) con índices oficiales que se actualizan solos.",
   "main": "src/main.js",
   "author": "Inmobiliaria M.M. Fuentes",
