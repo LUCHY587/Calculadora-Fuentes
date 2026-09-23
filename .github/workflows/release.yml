@@ -1,0 +1,4 @@
+name: Compilar y publicar instalador de Windows
+"on": { workflow_dispatch: {} }
+permissions: { contents: write }
+jobs: { build-and-release: { runs-on: windows-latest, steps: [ { name: "Descargar el codigo", uses: "actions/checkout@v4" }, { name: "Instalar Node.js", uses: "actions/setup-node@v4", with: { node-version: 20 } }, { name: "Instalar dependencias", run: "npm ci" }, { name: "Correr las pruebas", run: "npm test" }, { name: "Compilar y publicar el instalador", run: "npx electron-builder --win --x64 --publish always", env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" } } ] } }
