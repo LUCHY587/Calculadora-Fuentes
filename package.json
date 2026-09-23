@@ -1,0 +1,77 @@
+{
+  "name": "calculadora-alquileres-mmfuentes",
+  "productName": "Calculadora de Alquileres",
+  "version": "1.4.2",
+  "description": "Calculadora de actualización de alquileres (ICL, IPC, CER, IS, IPIM, UVA) con índices oficiales que se actualizan solos.",
+  "main": "src/main.js",
+  "author": "Inmobiliaria M.M. Fuentes",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/calc.test.js test/data-service.test.js test/contracts.test.js",
+    "seed": "node scripts/make-seed.js",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^44.4.3",
+    "electron-builder": "^26.15.3",
+    "fflate": "^0.8.3",
+    "resedit": "^2.0.3"
+  },
+  "build": {
+    "appId": "ar.com.mmfuentes.calculadora-alquileres",
+    "productName": "Calculadora de Alquileres",
+    "copyright": "Inmobiliaria M.M. Fuentes",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "data/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "afterPack": "scripts/after-pack.js",
+    "win": {
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Calculadora de Alquileres",
+      "language": "3082",
+      "artifactName": "Calculadora-de-Alquileres-Instalador-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Calculadora-de-Alquileres-Portable-${version}.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "LUCHY587",
+      "repo": "Calculadora-Fuentes",
+      "releaseType": "release"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}
