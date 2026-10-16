@@ -16,6 +16,9 @@ const path = require('path');
 const BCRA_BASE = 'https://api.bcra.gob.ar/estadisticas/v4.0/monetarias';
 const DATOS_SERIES = 'https://apis.datos.gob.ar/series/api/series';
 const HISTORY_FROM = '2020-01-01';
+// Variable 27 del BCRA: inflación mensual (%) del INDEC, redondeada a 1 decimal. La publica el mismo día que el INDEC,
+// mientras que datos.gob.ar suele tardar días en incorporar el mes nuevo. Se usa sólo como dato PROVISORIO.
+const BCRA_INFLACION_MENSUAL = 27;
 
 const SOURCES = {
   icl: { kind: 'bcra', id: 40, nombre: 'ICL' },
@@ -144,6 +147,36 @@ async function fetchIndex(fetchFn, key, existingPoints, hoy = todayISO()) {
   return cleanPoints(rows);
 }
 
+// Si el INDEC ya publicó un mes que datos.gob.ar todavía no incorporó, lo reconstruimos con la variación mensual del
+// BCRA (índice del mes anterior x (1 + variación)). Devuelve los puntos extendidos y los meses provisorios; los
+// provisorios se descartan solos en la próxima descarga, cuando datos.gob.ar ya trae el valor exacto.
+async function addProvisionalIpc(fetchFn, points, hoy = todayISO()) {
+  if (!points || !points.length) return { points, provisional: [] };
+  const monthOf = (iso) => iso.slice(0, 7);
+  const nextMonth = (ym) => {
+    const [y, m] = ym.split('-').map(Number);
+    return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+  };
+  const lastPoint = points[points.length - 1];
+  const desde = shiftDays(lastPoint[0].slice(0, 7) + '-01', -5);
+  const rows = await fetchBcra(fetchFn, BCRA_INFLACION_MENSUAL, desde > shiftDays(hoy, -30) ? shiftDays(hoy, -30) : desde);
+  const pctByMonth = new Map(rows.filter(([d, v]) => Number.isFinite(v)).map(([d, v]) => [monthOf(d), v]));
+  const out = points.slice();
+  const provisional = [];
+  let ym = nextMonth(monthOf(lastPoint[0]));
+  let level = lastPoint[1];
+  // Salvaguarda: una variación mensual fuera de este rango es un dato roto, no inflación: no se usa.
+  const sana = (v) => v > -5 && v < 30;
+  while (pctByMonth.has(ym) && sana(pctByMonth.get(ym)) && ym <= monthOf(hoy)) {
+    level = Math.round(level * (1 + pctByMonth.get(ym) / 100) * 10000) / 10000;
+    const iso = `${ym}-01`;
+    out.push([iso, level]);
+    provisional.push(iso);
+    ym = nextMonth(ym);
+  }
+  return { points: out, provisional };
+}
+
 // ---------------------------------------------------------------- servicio
 
 function readJSON(file) {
@@ -175,7 +208,7 @@ function createService({ fetch: fetchFn, cachePath, seedPath, now = () => new Da
       let chosen = c;
       if (!c || lastDate(s) > lastDate(c)) chosen = s;
       if (chosen === s && s) usedSeed = true;
-      indices[key] = { points: (chosen && chosen.points) || [], error: null };
+      indices[key] = { points: (chosen && chosen.points) || [], provisional: (chosen === c && c && c.provisional) || [], error: null };
     }
     state = {
       indices,
@@ -195,7 +228,7 @@ function createService({ fetch: fetchFn, cachePath, seedPath, now = () => new Da
         version: 1,
         updatedAt: state.updatedAt,
         checkedAt: state.checkedAt,
-        indices: Object.fromEntries(KEYS.map((k) => [k, { points: state.indices[k].points }])),
+        indices: Object.fromEntries(KEYS.map((k) => [k, { points: state.indices[k].points, provisional: state.indices[k].provisional || [] }])),
       };
       const tmp = cachePath + '.tmp';
       fs.writeFileSync(tmp, JSON.stringify(payload));
@@ -225,7 +258,14 @@ function createService({ fetch: fetchFn, cachePath, seedPath, now = () => new Da
           try {
             const points = await fetchIndex(fetchFn, key, state.indices[key].points, todayISO(now()));
             if (!points.length) throw new Error('La fuente no devolvió datos');
-            return { key, points };
+            if (key === 'ipc') {
+              // Mejor esfuerzo: si el BCRA no responde, se queda con lo que trajo datos.gob.ar.
+              try {
+                const ext = await addProvisionalIpc(fetchFn, points, todayISO(now()));
+                return { key, points: ext.points, provisional: ext.provisional };
+              } catch (_) { /* sin dato provisorio */ }
+            }
+            return { key, points, provisional: [] };
           } catch (e) {
             return { key, error: e && e.message ? e.message : String(e) };
           }
@@ -233,7 +273,7 @@ function createService({ fetch: fetchFn, cachePath, seedPath, now = () => new Da
       );
       for (const r of results) {
         if (r.points) {
-          state.indices[r.key] = { points: r.points, error: null };
+          state.indices[r.key] = { points: r.points, provisional: r.provisional || [], error: null };
           okCount++;
         } else {
           state.indices[r.key].error = r.error;
@@ -265,4 +305,4 @@ function createService({ fetch: fetchFn, cachePath, seedPath, now = () => new Da
   };
 }
 
-module.exports = { createService, fetchIndex, SOURCES, KEYS, todayISO };
+module.exports = { createService, fetchIndex, addProvisionalIpc, SOURCES, KEYS, todayISO };
