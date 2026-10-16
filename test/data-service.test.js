@@ -13,6 +13,10 @@ function makeFetch({ failHosts = [], log = [], hoy = '2026-09-21' } = {}) {
     const u = new URL(url);
     log.push(url);
     if (failHosts.includes(u.host)) return { ok: false, status: 503, json: async () => ({}), text: async () => '' };
+    if (u.host === 'api.bcra.gob.ar' && u.pathname.endsWith('/27')) {
+      // inflación mensual: sin meses nuevos
+      return { ok: true, status: 200, json: async () => ({ status: 200, metadata: { resultset: { count: 0, offset: 0, limit: 1000 } }, results: [{ idVariable: 27, detalle: [] }] }) };
+    }
     if (u.host === 'api.bcra.gob.ar') {
       // 2.500 días hacia atrás desde 2026-10-16, orden descendente como la API real
       const all = [];
@@ -104,4 +108,44 @@ test('sin conexión ni caché ni snapshot: arranca vacío sin romper', async () 
   const svc = createService({ fetch: async () => { throw new Error('offline'); }, cachePath: path.join(dir, 'c.json'), seedPath: 'x' });
   const st = svc.load();
   assert.equal(st.indices.icl.points.length, 0);
+});
+
+test('IPC: si el INDEC ya publicó un mes que datos.gob.ar no tiene, usa el dato provisorio del BCRA y lo marca', async () => {
+  const dir = tmp();
+  const base = makeFetch({ hoy: '2026-10-16' });
+  const fetchFn = async (url) => {
+    const u = new URL(url);
+    if (u.host === 'api.bcra.gob.ar' && u.pathname.endsWith('/27')) {
+      const detalle = [{ fecha: '2026-09-30', valor: 1.9 }, { fecha: '2026-08-31', valor: 1.7 }];
+      return { ok: true, status: 200, json: async () => ({ status: 200, metadata: { resultset: { count: 2, offset: 0, limit: 1000 } }, results: [{ idVariable: 27, detalle }] }) };
+    }
+    return base(url);
+  };
+  const svc = createService({ fetch: fetchFn, cachePath: path.join(dir, 'c.json'), seedPath: path.join(dir, 'x.json'), now: () => new Date('2026-10-16T12:00:00') });
+  svc.load();
+  const st = await svc.refresh();
+  const ipc = st.indices.ipc;
+  assert.equal(ipc.error, null);
+  assert.deepEqual(ipc.provisional, ['2026-09-01']);
+  const last = ipc.points[ipc.points.length - 1];
+  assert.equal(last[0], '2026-09-01');
+  assert.equal(last[1], Math.round(102 * 1.019 * 10000) / 10000);
+  // se guarda en el caché y sobrevive a un reinicio
+  const svc2 = createService({ fetch: fetchFn, cachePath: path.join(dir, 'c.json'), seedPath: path.join(dir, 'x.json') });
+  assert.deepEqual(svc2.load().indices.ipc.provisional, ['2026-09-01']);
+});
+
+test('IPC: si el BCRA falla, el IPC igual se actualiza con datos.gob.ar y no hay provisorios', async () => {
+  const dir = tmp();
+  const base = makeFetch({ hoy: '2026-10-16' });
+  const fetchFn = async (url) => {
+    const u = new URL(url);
+    if (u.host === 'api.bcra.gob.ar' && u.pathname.endsWith('/27')) return { ok: false, status: 503, json: async () => ({}), text: async () => '' };
+    return base(url);
+  };
+  const svc = createService({ fetch: fetchFn, cachePath: path.join(dir, 'c.json'), seedPath: path.join(dir, 'x.json'), now: () => new Date('2026-10-16T12:00:00') });
+  svc.load();
+  const st = await svc.refresh();
+  assert.equal(st.indices.ipc.error, null);
+  assert.deepEqual(st.indices.ipc.provisional, []);
 });
