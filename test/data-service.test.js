@@ -149,3 +149,40 @@ test('IPC: si el BCRA falla, el IPC igual se actualiza con datos.gob.ar y no hay
   assert.equal(st.indices.ipc.error, null);
   assert.deepEqual(st.indices.ipc.provisional, []);
 });
+
+test('datos.gob.ar: si una dirección devuelve la serie vacía, prueba otra forma y trae los datos', async () => {
+  const dir = tmp();
+  const base = makeFetch({ hoy: '2026-10-16' });
+  const vistas = [];
+  const fetchFn = async (url) => {
+    const u = new URL(url);
+    if (u.host === 'apis.datos.gob.ar') {
+      vistas.push(url);
+      // Reproduce el problema real: la forma "start_date antes de limit" responde vacía.
+      if (url.indexOf('start_date') !== -1 && url.indexOf('start_date') < url.indexOf('limit')) {
+        return { ok: true, status: 200, json: async () => ({ data: [], count: 0 }) };
+      }
+    }
+    return base(url);
+  };
+  const svc = createService({ fetch: fetchFn, cachePath: path.join(dir, 'c.json'), seedPath: path.join(dir, 'x.json'), now: () => new Date('2026-10-16T12:00:00') });
+  svc.load();
+  const st = await svc.refresh();
+  assert.equal(st.indices.ipim.error, null);
+  assert.ok(st.indices.ipim.points.length >= 3);
+  assert.equal(st.updatedAt, st.checkedAt);
+});
+
+test('datos.gob.ar: si todas las formas vienen vacías, se informa el error y se conservan los datos guardados', async () => {
+  const dir = tmp();
+  const base = makeFetch({ hoy: '2026-10-16' });
+  const fetchFn = async (url) => {
+    const u = new URL(url);
+    if (u.host === 'apis.datos.gob.ar') return { ok: true, status: 200, json: async () => ({ data: [], count: 0 }) };
+    return base(url);
+  };
+  const svc = createService({ fetch: fetchFn, cachePath: path.join(dir, 'c.json'), seedPath: path.join(dir, 'x.json') });
+  svc.load();
+  const st = await svc.refresh();
+  assert.match(st.indices.ipim.error, /vac/);
+});
