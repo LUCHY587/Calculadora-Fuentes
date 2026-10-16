@@ -28,7 +28,7 @@
     const rows = d.meses
       .map((m) => `<tr><td>${esc(C.cap(C.fmtMes(m.mes)))}</td><td class="num">${C.fmtIdx(m.valor)}${m.repetido ? ' <span class="rep">*</span>' : ''}</td><td class="num">${C.fmtPct(m.variacion)}</td><td class="num">${C.fmtPct(m.acumulado)}</td></tr>`)
       .join('');
-    const rep = d.meses.some((m) => m.repetido) ? '<p class="explain"><span class="rep">*</span> Mes aún no publicado: se repite la última variación mensual conocida.</p>' : '';
+    const rep = d.meses.some((m) => m.repetido) ? '<p class="explain"><span class="rep">*</span> Mes estimado o provisorio: todavía no está el valor oficial exacto. Se usa la variación publicada por el BCRA o, si no hay, se repite la última conocida; se recalcula solo cuando salga el dato oficial.</p>' : '';
     return `<table><thead><tr><th>Mes</th><th class="num">Índice</th><th class="num">Variación mensual</th><th class="num">Acumulado</th></tr></thead><tbody>${rows}</tbody></table>${rep}`;
   }
 
