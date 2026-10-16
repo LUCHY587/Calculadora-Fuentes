@@ -103,10 +103,28 @@ async function fetchBcra(fetchFn, id, desde) {
 }
 
 async function fetchDatos(fetchFn, id) {
-  const url = `${DATOS_SERIES}?ids=${encodeURIComponent(id)}&start_date=${HISTORY_FROM}&limit=1000&format=json`;
-  const json = await (await request(fetchFn, url)).json();
-  if (!json || !Array.isArray(json.data)) throw new Error('Respuesta inesperada de datos.gob.ar');
-  return json.data.map((row) => [String(row[0]), Number(row[1])]);
+  // datos.gob.ar a veces responde HTTP 200 con la serie VACÍA para una dirección puntual (guarda esa respuesta),
+  // mientras que la misma consulta con otro orden de parámetros o sin fecha de inicio devuelve todo. Por eso
+  // probamos varias formas equivalentes y nos quedamos con la primera que traiga datos.
+  const e = encodeURIComponent(id);
+  const urls = [
+    `${DATOS_SERIES}?ids=${e}&limit=1000&format=json&start_date=${HISTORY_FROM}`,
+    `${DATOS_SERIES}?ids=${e}&limit=1000&format=json`,
+    `${DATOS_SERIES}?ids=${e}&start_date=${HISTORY_FROM}&limit=1000&format=json`,
+  ];
+  let lastErr = new Error('Respuesta inesperada de datos.gob.ar');
+  for (const url of urls) {
+    try {
+      const json = await (await request(fetchFn, url)).json();
+      if (!json || !Array.isArray(json.data)) throw new Error('Respuesta inesperada de datos.gob.ar');
+      const rows = json.data.map((row) => [String(row[0]), Number(row[1])]).filter(([d]) => d >= HISTORY_FROM);
+      if (rows.length) return rows;
+      lastErr = new Error('datos.gob.ar devolvió la serie vacía');
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
 }
 
 async function fetchCsv(fetchFn, src) {
