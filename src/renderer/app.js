@@ -269,10 +269,11 @@
         return `<div class="icard"><div class="h"><span class="n">${info.nombre}</span><span class="src">${info.fuente}</span></div><div class="l">${esc(info.largo)}</div><div class="w">Sin datos todavía.</div></div>`;
       }
       const v12 = C.variacion12m(k, S);
+      const prov = !!(state && state.indices[k] && state.indices[k].provisional && state.indices[k].provisional.length);
       const rows = S.tipo === 'diario'
         ? `<div class="row"><span>Último dato</span><b>${C.fmtFecha(S.lastDate)}</b></div><div class="row"><span>Valor</span><b>${C.fmtIdx(S.lastValue)}</b></div>`
         : `<div class="row"><span>Último dato</span><b>${esc(C.cap(C.fmtMes(C.monthISO(S.lastMonth))))}</b></div><div class="row"><span>Variación del mes</span><b>${C.fmtPct(S.lastVar * 100)}</b></div>`;
-      return `<div class="icard"><div class="h"><span class="n">${info.nombre}</span><span class="src">${info.fuente}</span></div><div class="l">${esc(info.largo)}</div>${rows}<div class="row"><span>Últimos 12 meses</span><b>${v12 == null ? '—' : C.fmtPct(v12)}</b></div>${err ? `<div class="w">No se pudo actualizar (${esc(err)}). Se usa el último dato guardado.</div>` : ''}</div>`;
+      return `<div class="icard"><div class="h"><span class="n">${info.nombre}</span><span class="src">${info.fuente}</span></div><div class="l">${esc(info.largo)}</div>${rows}<div class="row"><span>Últimos 12 meses</span><b>${v12 == null ? '—' : C.fmtPct(v12)}</b></div>${prov ? `<div class="w">El último mes es provisorio (dato del BCRA, redondeado a 1 decimal). Se reemplaza solo por el valor exacto del INDEC apenas se publique en datos.gob.ar.</div>` : ''}${err ? `<div class="w">No se pudo actualizar (${esc(err)}). Se usa el último dato guardado.</div>` : ''}</div>`;
     }).join('');
   }
 
