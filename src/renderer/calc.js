@@ -83,8 +83,9 @@
     };
   }
 
-  function monthlySeries(points) {
+  function monthlySeries(points, provisional) {
     const map = new Map();
+    const prov = new Set((provisional || []).map(monthNum));
     for (const [d, v] of points) map.set(monthNum(d), v);
     if (!map.size) return null;
     const months = [...map.keys()].sort((a, b) => a - b);
@@ -103,7 +104,7 @@
       lastVar: ratio - 1,
       at(mn) {
         if (mn < first) return null;
-        if (map.has(mn)) return { valor: map.get(mn), estimado: false };
+        if (map.has(mn)) return { valor: map.get(mn), estimado: prov.has(mn) };
         if (mn > last) return { valor: lastValue * Math.pow(ratio, mn - last), estimado: true };
         let k = mn;
         while (k > first && !map.has(k)) k--;
@@ -117,7 +118,7 @@
     for (const key of ORDEN) {
       const pts = indices && indices[key] && indices[key].points;
       if (!pts || !pts.length) continue;
-      out[key] = INDICES[key].tipo === 'diario' ? dailySeries(pts) : monthlySeries(pts);
+      out[key] = INDICES[key].tipo === 'diario' ? dailySeries(pts) : monthlySeries(pts, indices[key].provisional);
     }
     return out;
   }
